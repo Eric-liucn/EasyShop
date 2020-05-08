@@ -10,6 +10,9 @@ import net.minecraftforge.fml.common.registry.ForgeRegistries;
 import ninja.leaping.configurate.objectmapping.ObjectMappingException;
 import org.spongepowered.api.Sponge;
 import org.spongepowered.api.entity.living.player.Player;
+import org.spongepowered.api.event.cause.Cause;
+import org.spongepowered.api.event.cause.EventContext;
+import org.spongepowered.api.event.cause.EventContextKeys;
 import org.spongepowered.api.event.item.inventory.ClickInventoryEvent;
 import org.spongepowered.api.item.inventory.Inventory;
 import org.spongepowered.api.item.inventory.ItemStack;
@@ -17,6 +20,8 @@ import org.spongepowered.api.item.inventory.property.InventoryDimension;
 import org.spongepowered.api.item.inventory.property.InventoryTitle;
 import org.spongepowered.api.service.economy.Currency;
 import org.spongepowered.api.service.economy.EconomyService;
+import org.spongepowered.api.service.economy.transaction.ResultType;
+import org.spongepowered.api.service.economy.transaction.TransactionResult;
 import org.spongepowered.common.item.inventory.util.ItemStackUtil;
 
 import java.math.BigDecimal;
@@ -63,7 +68,14 @@ public class InventoryBuilder {
                 )))
                 .listener(ClickInventoryEvent.class,event->{
                     event.setCancelled(true);
-
+                    try {
+                        tryTransaction(
+                                event.getTransactions().get(0).getSlot().peek().orElse(ItemStack.empty()),
+                                (Player) event.getSource()
+                        );
+                    }catch (Exception e){
+                        Main.INSTANCE.logger.error(((Player)event.getSource()).getName()+"尝试交易失败！");
+                    }
                 })
                 .build(Main.INSTANCE);
     }
@@ -80,17 +92,44 @@ public class InventoryBuilder {
             EconomyService economyService = optionalEconomyService.get();
             Currency currency = getCurrencyByName(economyService, itemStackAndCurrency.get(itemStack));
             if (currency==null){
-                return false;
                 Main.INSTANCE.logger.error("未找到对应货币");
+                return false;
             }
 
             Double price = itemStackAndPrice.get(itemStack);
 
             economyService.getOrCreateAccount(player.getUniqueId()).ifPresent(uniqueAccount -> {
-                BigDecimal balance = uniqueAccount.getBalance(currency);
-                balance
+                BigDecimal balanceBig = uniqueAccount.getBalance(currency);
+                double balance = balanceBig.doubleValue();
+                if ((balance - price) >= 0){
+                    if (price>0){
+                        TransactionResult result = uniqueAccount.withdraw(currency,BigDecimal.valueOf(price),
+                                Cause.builder()
+                                        .build(EventContext.builder().
+                                                add(EventContextKeys.PLUGIN,Main.INSTANCE.pluginContainer)
+                                                .build()));
+                        if (result.getResult().equals(ResultType.SUCCESS)){
+                            player.sendMessage(Utils.strFormat("&a交易成功！"));
+                        }else {
+                            player.sendMessage(Utils.strFormat("&4交易失败！"));
+                        }
+                    }else {
+                        TransactionResult result = uniqueAccount.deposit(currency,BigDecimal.valueOf(price),
+                                Cause.builder()
+                                        .build(EventContext.builder().
+                                                add(EventContextKeys.PLUGIN,Main.INSTANCE.pluginContainer)
+                                                .build()));
+                        if (result.getResult().equals(ResultType.SUCCESS)){
+                            player.sendMessage(Utils.strFormat("&a交易成功！"));
+                        }else {
+                            player.sendMessage(Utils.strFormat("&4交易失败！"));
+                        }
+                    }
+                }else {
+                    player.sendMessage(Utils.strFormat("&4你的账户余额不足或为负值！"));
+                }
             });
-
+            return true;
         }
     }
 
