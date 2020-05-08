@@ -1,20 +1,106 @@
 package com.github.ericliucn.easyshop.inventory;
 
+import com.github.ericliucn.easyshop.Main;
 import com.github.ericliucn.easyshop.config.Config;
+import com.github.ericliucn.easyshop.utils.Utils;
+import com.google.common.reflect.TypeToken;
+import net.minecraft.item.Item;
+import net.minecraft.util.ResourceLocation;
+import net.minecraftforge.fml.common.registry.ForgeRegistries;
+import ninja.leaping.configurate.objectmapping.ObjectMappingException;
+import org.spongepowered.api.Sponge;
+import org.spongepowered.api.entity.living.player.Player;
+import org.spongepowered.api.event.item.inventory.ClickInventoryEvent;
 import org.spongepowered.api.item.inventory.Inventory;
 import org.spongepowered.api.item.inventory.ItemStack;
+import org.spongepowered.api.item.inventory.property.InventoryDimension;
+import org.spongepowered.api.item.inventory.property.InventoryTitle;
+import org.spongepowered.api.service.economy.Currency;
+import org.spongepowered.api.service.economy.EconomyService;
+import org.spongepowered.common.item.inventory.util.ItemStackUtil;
 
-import java.util.ArrayList;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
+import java.math.BigDecimal;
+import java.util.*;
 
 public class InventoryBuilder {
-    
-    public static void init(){
-        ItemStack[] itemStacks = new ItemStack[Config.items.keySet()];
-        Set<ItemStack> stacks =new HashSet<>();
-        stacks[1]
+
+    public Inventory inventory;
+    private List<String> itemStr;
+    public List<ItemStack> itemStacks;
+    public Map<ItemStack, Double> itemStackAndPrice;
+    public Map<ItemStack, String> itemStackAndCurrency;
+    private int invIndex;
+
+    public InventoryBuilder(int index) throws ObjectMappingException {
+        this.invIndex = index;
+        this.itemStr = Config.rootNode
+                .getNode("Shops", String.valueOf(index), "Items")
+                .getList(TypeToken.of(String.class));
 
     }
+
+    private void loadItemStacks(){
+        if (itemStr.size()!=0){
+            for (String string:itemStr){
+                String[] strings = string.split(",");
+                Item item = ForgeRegistries.ITEMS.getValue(new ResourceLocation(strings[0]));
+                if (item!=null){
+                    net.minecraft.item.ItemStack nativeItemStack
+                            = new net.minecraft.item.ItemStack(item,1, Integer.parseInt(strings[1]));
+                    itemStacks.add(ItemStackUtil.fromNative(nativeItemStack));
+                    itemStackAndPrice.put(ItemStackUtil.fromNative(nativeItemStack),Double.parseDouble(strings[2]));
+                    itemStackAndCurrency.put(ItemStackUtil.fromNative(nativeItemStack),strings[3]);
+                }
+            }
+        }
+    }
+
+    private void loadInventory(){
+        this.inventory = Inventory.builder()
+                .property(InventoryDimension.PROPERTY_NAME,InventoryDimension.of(9,6))
+                .property(InventoryTitle.PROPERTY_NAME,InventoryTitle.of(Utils.strFormat(
+                        Config.rootNode.getNode("Shops",String.valueOf(invIndex),"Name").getString()
+                )))
+                .listener(ClickInventoryEvent.class,event->{
+                    event.setCancelled(true);
+
+                })
+                .build(Main.INSTANCE);
+    }
+
+    private boolean tryTransaction(ItemStack itemStack, Player player){
+        if (!itemStackAndCurrency.containsKey(itemStack) || !itemStackAndPrice.containsKey(itemStack)){
+            return false;
+        }else {
+            Optional<EconomyService> optionalEconomyService = Sponge.getServiceManager().provide(EconomyService.class);
+            if (!optionalEconomyService.isPresent()) {
+                return false;
+            }
+
+            EconomyService economyService = optionalEconomyService.get();
+            Currency currency = getCurrencyByName(economyService, itemStackAndCurrency.get(itemStack));
+            if (currency==null){
+                return false;
+                Main.INSTANCE.logger.error("未找到对应货币");
+            }
+
+            Double price = itemStackAndPrice.get(itemStack);
+
+            economyService.getOrCreateAccount(player.getUniqueId()).ifPresent(uniqueAccount -> {
+                BigDecimal balance = uniqueAccount.getBalance(currency);
+                balance
+            });
+
+        }
+    }
+
+    private Currency getCurrencyByName(EconomyService economyService, String name){
+        for (Currency currency:economyService.getCurrencies()){
+            if (currency.getDisplayName().toPlain().equals(name)){
+                return currency;
+            }
+        }
+        return null;
+    }
+
 }

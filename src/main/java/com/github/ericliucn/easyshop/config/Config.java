@@ -26,7 +26,7 @@ public class Config {
     public static final File config = new File(Main.INSTANCE.file, "easyshop.conf");
     public static ConfigurationLoader<CommentedConfigurationNode> loader
             = HoconConfigurationLoader.builder().setFile(config).build();
-    public static final Map<ItemStack, Map<String,Double>> items = new HashMap<>();
+    public static int shopCount;
 
 
     public static void init() throws IOException {
@@ -51,27 +51,11 @@ public class Config {
 
     public static void load() throws IOException {
         rootNode = loader.load();
+        shopCount = rootNode.getNode("Shops").getChildrenMap().keySet().size();
     }
 
     public static void save() throws IOException {
         loader.save(rootNode);
-    }
-
-    public static void loadItems() throws ObjectMappingException {
-        items.clear();
-        List<String> strings = rootNode.getNode("Items").getList(TypeToken.of(String.class));
-        for (String string:strings
-             ) {
-            String[] one = string.split(",");
-            Item item = ForgeRegistries.ITEMS.getValue(new ResourceLocation(one[0]));
-            assert item != null;
-            net.minecraft.item.ItemStack itemStack = new net.minecraft.item.ItemStack(item,1,Integer.parseInt(one[1]));
-            double price = Double.parseDouble(one[2]);
-            String currency = one[3];
-            Map<String, Double> priceAndDouble = new HashMap<>();
-            priceAndDouble.put(currency,price);
-            items.put(ItemStackUtil.fromNative(itemStack),priceAndDouble);
-        }
     }
 
 }

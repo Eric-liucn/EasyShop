@@ -21,7 +21,7 @@ import java.io.File;
 public class Main {
 
     @Inject
-    private Logger logger;
+    public Logger logger;
 
     @Inject
     public PluginContainer pluginContainer;
