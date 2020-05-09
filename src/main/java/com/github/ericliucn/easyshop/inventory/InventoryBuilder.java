@@ -31,6 +31,7 @@ import org.spongepowered.api.service.economy.transaction.ResultType;
 import org.spongepowered.api.service.economy.transaction.TransactionResult;
 import org.spongepowered.api.service.user.UserStorageService;
 import org.spongepowered.common.item.inventory.util.ItemStackUtil;
+import org.spongepowered.common.mixin.api.mcp.entity.player.EntityPlayerMPMixin_API;
 
 import java.math.BigDecimal;
 import java.util.*;
@@ -39,7 +40,7 @@ public class InventoryBuilder {
 
     public Inventory inventory;
     private final List<String> itemStr;
-    public Map<Integer, ItemStack> itemStacks = new HashMap<>();
+    public final Map<Integer, ItemStack> itemStacks = new HashMap<>();
     public Map<Integer,Map<String,Double>> indexOfPriceAndCurrency = new HashMap<>();
     private final int invIndex;
     public EconomyService economyService = Sponge.getServiceManager().provideUnchecked(EconomyService.class);
