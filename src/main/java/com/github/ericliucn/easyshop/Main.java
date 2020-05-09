@@ -1,7 +1,10 @@
 package com.github.ericliucn.easyshop;
 
+import com.github.ericliucn.easyshop.commands.Base;
+import com.github.ericliucn.easyshop.config.Config;
 import com.google.inject.Inject;
 import org.slf4j.Logger;
+import org.spongepowered.api.Sponge;
 import org.spongepowered.api.config.ConfigDir;
 import org.spongepowered.api.event.game.state.GameStartedServerEvent;
 import org.spongepowered.api.event.Listener;
@@ -9,6 +12,7 @@ import org.spongepowered.api.plugin.Plugin;
 import org.spongepowered.api.plugin.PluginContainer;
 
 import java.io.File;
+import java.io.IOException;
 
 @Plugin(
         id = "easyshop",
@@ -33,9 +37,9 @@ public class Main {
     public static Main INSTANCE;
 
     @Listener
-    public void onServerStart(GameStartedServerEvent event) {
+    public void onServerStart(GameStartedServerEvent event) throws IOException {
         INSTANCE = this;
-
-
+        Config.init();
+        Sponge.getCommandManager().register(this, Base.build(),"es","easyshop","eshop");
     }
 }

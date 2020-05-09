@@ -30,18 +30,19 @@ import java.util.*;
 public class InventoryBuilder {
 
     public Inventory inventory;
-    private List<String> itemStr;
-    public List<ItemStack> itemStacks;
-    public Map<ItemStack, Double> itemStackAndPrice;
-    public Map<ItemStack, String> itemStackAndCurrency;
-    private int invIndex;
+    private final List<String> itemStr;
+    public List<ItemStack> itemStacks = new ArrayList<>();
+    public Map<ItemStack, Double> itemStackAndPrice = new HashMap<>();
+    public Map<ItemStack, String> itemStackAndCurrency = new HashMap<>();
+    private final int invIndex;
 
     public InventoryBuilder(int index) throws ObjectMappingException {
         this.invIndex = index;
         this.itemStr = Config.rootNode
                 .getNode("Shops", String.valueOf(index), "Items")
                 .getList(TypeToken.of(String.class));
-
+        this.loadItemStacks();
+        this.loadInventory();
     }
 
     private void loadItemStacks(){
