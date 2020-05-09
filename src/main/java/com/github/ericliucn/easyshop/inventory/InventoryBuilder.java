@@ -4,6 +4,8 @@ import com.github.ericliucn.easyshop.Main;
 import com.github.ericliucn.easyshop.config.Config;
 import com.github.ericliucn.easyshop.utils.Utils;
 import com.google.common.reflect.TypeToken;
+import net.minecraft.entity.player.EntityPlayer;
+import net.minecraft.entity.player.EntityPlayerMP;
 import net.minecraft.item.Item;
 import net.minecraft.util.ResourceLocation;
 import net.minecraftforge.fml.common.registry.ForgeRegistries;
@@ -16,12 +18,18 @@ import org.spongepowered.api.event.cause.EventContextKeys;
 import org.spongepowered.api.event.item.inventory.ClickInventoryEvent;
 import org.spongepowered.api.item.inventory.Inventory;
 import org.spongepowered.api.item.inventory.ItemStack;
+import org.spongepowered.api.item.inventory.Slot;
 import org.spongepowered.api.item.inventory.property.InventoryDimension;
 import org.spongepowered.api.item.inventory.property.InventoryTitle;
+import org.spongepowered.api.item.inventory.property.SlotIndex;
+import org.spongepowered.api.item.inventory.property.SlotSide;
+import org.spongepowered.api.item.inventory.query.QueryOperation;
+import org.spongepowered.api.item.inventory.query.QueryOperationTypes;
 import org.spongepowered.api.service.economy.Currency;
 import org.spongepowered.api.service.economy.EconomyService;
 import org.spongepowered.api.service.economy.transaction.ResultType;
 import org.spongepowered.api.service.economy.transaction.TransactionResult;
+import org.spongepowered.api.service.user.UserStorageService;
 import org.spongepowered.common.item.inventory.util.ItemStackUtil;
 
 import java.math.BigDecimal;
@@ -31,18 +39,18 @@ public class InventoryBuilder {
 
     public Inventory inventory;
     private final List<String> itemStr;
-    public List<ItemStack> itemStacks = new ArrayList<>();
-    public Map<ItemStack, Double> itemStackAndPrice = new HashMap<>();
-    public Map<ItemStack, String> itemStackAndCurrency = new HashMap<>();
+    public Map<Integer, ItemStack> itemStacks = new HashMap<>();
+    public Map<Integer,Map<String,Double>> indexOfPriceAndCurrency = new HashMap<>();
     private final int invIndex;
+    public EconomyService economyService = Sponge.getServiceManager().provideUnchecked(EconomyService.class);
 
     public InventoryBuilder(int index) throws ObjectMappingException {
         this.invIndex = index;
         this.itemStr = Config.rootNode
                 .getNode("Shops", String.valueOf(index), "Items")
                 .getList(TypeToken.of(String.class));
-        this.loadItemStacks();
         this.loadInventory();
+        this.loadItemStacks();
     }
 
     private void loadItemStacks(){
@@ -53,9 +61,15 @@ public class InventoryBuilder {
                 if (item!=null){
                     net.minecraft.item.ItemStack nativeItemStack
                             = new net.minecraft.item.ItemStack(item,1, Integer.parseInt(strings[1]));
-                    itemStacks.add(ItemStackUtil.fromNative(nativeItemStack));
-                    itemStackAndPrice.put(ItemStackUtil.fromNative(nativeItemStack),Double.parseDouble(strings[2]));
-                    itemStackAndCurrency.put(ItemStackUtil.fromNative(nativeItemStack),strings[3]);
+                    int index = this.addItemStackToInv(ItemStackUtil.fromNative(nativeItemStack));
+                    if (index!=-1){
+                        Map<String,Double> currencyAndPrice = new HashMap<>();
+                        currencyAndPrice.put(strings[3],Double.parseDouble(strings[2]));
+                        indexOfPriceAndCurrency.put(index,currencyAndPrice);
+                    }else {
+                        Main.INSTANCE.logger.error("添加物品到列表时出错，请检查配置文件");
+                    }
+
                 }
             }
         }
@@ -70,75 +84,78 @@ public class InventoryBuilder {
                 .listener(ClickInventoryEvent.class,event->{
                     event.setCancelled(true);
                     try {
-                        tryTransaction(
-                                event.getTransactions().get(0).getSlot().peek().orElse(ItemStack.empty()),
-                                (Player) event.getSource()
-                        );
+                        if (event.getSlot().isPresent()){
+                            tryTransaction(event.getSlot().get(), ((Player) event.getSource()));
+                        }
                     }catch (Exception e){
+                        e.printStackTrace();
                         Main.INSTANCE.logger.error(((Player)event.getSource()).getName()+"尝试交易失败！");
                     }
                 })
                 .build(Main.INSTANCE);
     }
 
-    private boolean tryTransaction(ItemStack itemStack, Player player){
-        if (!itemStackAndCurrency.containsKey(itemStack) || !itemStackAndPrice.containsKey(itemStack)){
-            return false;
-        }else {
-            Optional<EconomyService> optionalEconomyService = Sponge.getServiceManager().provide(EconomyService.class);
-            if (!optionalEconomyService.isPresent()) {
-                return false;
-            }
-
-            EconomyService economyService = optionalEconomyService.get();
-            Currency currency = getCurrencyByName(economyService, itemStackAndCurrency.get(itemStack));
-            if (currency==null){
-                Main.INSTANCE.logger.error("未找到对应货币");
-                return false;
-            }
-
-            Double price = itemStackAndPrice.get(itemStack);
-
-            economyService.getOrCreateAccount(player.getUniqueId()).ifPresent(uniqueAccount -> {
-                BigDecimal balanceBig = uniqueAccount.getBalance(currency);
-                double balance = balanceBig.doubleValue();
-                if ((balance - price) >= 0){
-                    if (price>0){
-                        TransactionResult result = uniqueAccount.withdraw(currency,BigDecimal.valueOf(price),
-                                Cause.builder()
-                                        .build(EventContext.builder().
-                                                add(EventContextKeys.PLUGIN,Main.INSTANCE.pluginContainer)
-                                                .build()));
-                        if (result.getResult().equals(ResultType.SUCCESS)){
-                            player.sendMessage(Utils.strFormat("&a交易成功！"));
-                        }else {
-                            player.sendMessage(Utils.strFormat("&4交易失败！"));
-                        }
-                    }else {
-                        TransactionResult result = uniqueAccount.deposit(currency,BigDecimal.valueOf(price),
-                                Cause.builder()
-                                        .build(EventContext.builder().
-                                                add(EventContextKeys.PLUGIN,Main.INSTANCE.pluginContainer)
-                                                .build()));
-                        if (result.getResult().equals(ResultType.SUCCESS)){
-                            player.sendMessage(Utils.strFormat("&a交易成功！"));
-                        }else {
-                            player.sendMessage(Utils.strFormat("&4交易失败！"));
-                        }
-                    }
-                }else {
-                    player.sendMessage(Utils.strFormat("&4你的账户余额不足或为负值！"));
+    private Integer addItemStackToInv(ItemStack itemStack){
+        if (this.inventory.canFit(itemStack)){
+            for (Inventory slot:this.inventory.slots()){
+                if (!slot.peek().isPresent()){
+                    slot.set(itemStack);
+                    int index = slot.getInventoryProperty(SlotIndex.class).get().getValue();
+                    itemStacks.put(index, itemStack);
+                    return index;
                 }
-            });
-            return true;
+            }
         }
+        return -1;
     }
 
-    private Currency getCurrencyByName(EconomyService economyService, String name){
+    private void tryTransaction(Slot slot, Player player){
+        slot.getInventoryProperty(SlotIndex.class).ifPresent(slotIndex -> {
+            if (slotIndex.getValue()<54 && getCurrency(slotIndex.getValue())!=null){
+                this.economyService.getOrCreateAccount(player.getUniqueId()).ifPresent(uniqueAccount -> {
+
+                    if (!player.getInventory().canFit(itemStacks.get(slotIndex.getValue()))){
+                        player.closeInventory();
+                        player.sendMessage(Utils.strFormat("&4&l交易失败！你的背包空间不足"));
+                    }
+
+                    TransactionResult result = uniqueAccount.withdraw(getCurrency(slotIndex.getValue()),
+                            BigDecimal.valueOf(getPrice(slotIndex.getValue())),
+                            Cause.of(EventContext.builder().add(EventContextKeys.PLUGIN, Main.INSTANCE.pluginContainer).build(), Main.INSTANCE.pluginContainer));
+                    if (result.getResult().equals(ResultType.SUCCESS)){
+                        player.sendMessage(Utils.strFormat("&a交易成功"));
+                        player.getInventory().offer(itemStacks.get(slotIndex.getValue()));
+                    }else {
+                        player.sendMessage(Utils.strFormat("&4交易失败！，请联系管理员"));
+                    }
+
+                });
+            }
+        });
+    }
+
+    private Currency getCurrencyByName(String name){
         for (Currency currency:economyService.getCurrencies()){
-            if (currency.getDisplayName().toPlain().equals(name)){
+            if (currency.getDisplayName().toPlain().equalsIgnoreCase(name)){
                 return currency;
             }
+        }
+        return null;
+    }
+
+    private Double getPrice(int index){
+
+        for (Map.Entry<String, Double> entry:indexOfPriceAndCurrency.get(index).entrySet()
+             ) {
+            return entry.getValue();
+        }
+        return 10000000000D;
+    }
+
+    private Currency getCurrency(int index){
+        for (Map.Entry<String, Double> entry:indexOfPriceAndCurrency.get(index).entrySet()
+        ) {
+            return getCurrencyByName(entry.getKey());
         }
         return null;
     }
