@@ -40,7 +40,7 @@ public class InventoryBuilder {
 
     public Inventory inventory;
     private final List<String> itemStr;
-    public final Map<Integer, ItemStack> itemStacks = new HashMap<>();
+    public Map<Integer, ItemStack> itemStacks = new HashMap<>();
     public Map<Integer,Map<String,Double>> indexOfPriceAndCurrency = new HashMap<>();
     private final int invIndex;
     public EconomyService economyService = Sponge.getServiceManager().provideUnchecked(EconomyService.class);
@@ -86,6 +86,7 @@ public class InventoryBuilder {
                     event.setCancelled(true);
                     try {
                         if (event.getSlot().isPresent()){
+                            System.out.println(itemStacks);
                             tryTransaction(event.getSlot().get(), ((Player) event.getSource()));
                         }
                     }catch (Exception e){
