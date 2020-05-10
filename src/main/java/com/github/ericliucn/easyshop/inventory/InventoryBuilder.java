@@ -63,7 +63,7 @@ public class InventoryBuilder {
             int i = 0;
             for (String string:itemStr
                  ) {
-                if (i<54) {
+                if (i<=54) {
                     String[] strings = string.split(",");
                     Item item = ForgeRegistries.ITEMS.getValue(new ResourceLocation(strings[0]));
                     net.minecraft.item.ItemStack itemStack = new net.minecraft.item.ItemStack(item, 1, Integer.parseInt(strings[1]));
