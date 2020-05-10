@@ -1,5 +1,6 @@
 package com.github.ericliucn.easyshop.commands;
 
+import com.github.ericliucn.easyshop.config.Config;
 import com.github.ericliucn.easyshop.inventory.InventoryBuilder;
 import ninja.leaping.configurate.objectmapping.ObjectMappingException;
 import org.spongepowered.api.command.CommandException;
@@ -13,14 +14,18 @@ import org.spongepowered.api.entity.living.player.Player;
 import org.spongepowered.api.item.inventory.Inventory;
 import org.spongepowered.api.text.Text;
 
+import java.util.ArrayList;
+import java.util.List;
+import java.util.function.Function;
+
 public class Base implements CommandExecutor {
 
     @Override
     public CommandResult execute(CommandSource src, CommandContext args) throws CommandException {
 
-        int index = args.<Integer>getOne("index").orElse(1);
+        String shopName = args.<String>getOne("shop").get();
         try {
-            Inventory shop = new InventoryBuilder(index).inventory;
+            Inventory shop = new InventoryBuilder(shopName).inventory;
             if (src instanceof Player){
                 ((Player)src).openInventory(shop);
             }
@@ -32,11 +37,19 @@ public class Base implements CommandExecutor {
     }
 
     public static CommandSpec build(){
+        List<String> list = new ArrayList<>();
+        for (Object object:Config.rootNode.getNode("Shops").getChildrenMap().keySet()
+             ) {
+            list.add(object.toString());
+        }
+
         return CommandSpec.builder()
                 .executor(new Base())
+                .permission("easyshop.base")
                 .arguments(
-                        GenericArguments.optional(
-                                GenericArguments.integer(Text.of("index"))
+                        GenericArguments.withSuggestions(
+                                GenericArguments.string(Text.of("shop")),
+                                list
                         )
                 )
                 .build();

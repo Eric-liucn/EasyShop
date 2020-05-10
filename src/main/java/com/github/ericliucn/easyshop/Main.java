@@ -6,6 +6,7 @@ import com.google.inject.Inject;
 import org.slf4j.Logger;
 import org.spongepowered.api.Sponge;
 import org.spongepowered.api.config.ConfigDir;
+import org.spongepowered.api.event.game.GameReloadEvent;
 import org.spongepowered.api.event.game.state.GameStartedServerEvent;
 import org.spongepowered.api.event.Listener;
 import org.spongepowered.api.plugin.Plugin;
@@ -41,5 +42,10 @@ public class Main {
         INSTANCE = this;
         Config.init();
         Sponge.getCommandManager().register(this, Base.build(),"es","easyshop","eshop");
+    }
+
+    @Listener
+    public void onReload(GameReloadEvent event) throws IOException {
+        Config.load();
     }
 }
